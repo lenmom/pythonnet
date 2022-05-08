@@ -13,6 +13,7 @@ This document follows the conventions laid out in [Keep a CHANGELOG][].
 -   Python operator method will call C# operator method for supported binary and unary operators ([#1324][p1324]).
 -   Add GetPythonThreadID and Interrupt methods in PythonEngine
 -   Ability to implement delegates with `ref` and `out` parameters in Python, by returning the modified parameter values in a tuple. ([#1355][i1355])
+-   Ability to override .NET methods that have `out` or `ref` in Python by returning the modified parameter values in a tuple. ([#1481][i1481])
 -   `PyType` - a wrapper for Python type objects, that also permits creating new heap types from `TypeSpec`
 -    Improved exception handling:
   *   exceptions can now be converted with codecs
@@ -21,6 +22,7 @@ This document follows the conventions laid out in [Keep a CHANGELOG][].
 -   .NET collection types now implement standard Python collection interfaces from `collections.abc`.
 See [Mixins/collections.py](src/runtime/Mixins/collections.py).
 -   .NET arrays implement Python buffer protocol
+-   Python integer interoperability with `System.Numerics.BigInteger`
 -   Python.NET will correctly resolve .NET methods, that accept `PyList`, `PyInt`,
 and other `PyObject` derived types when called from Python.
 -   .NET classes, that have `__call__` method are callable from Python
@@ -34,10 +36,11 @@ and other `PyObject` derived types when called from Python.
 details about the cause of the failure
 -   `clr.AddReference` no longer adds ".dll" implicitly
 -   `PyIter(PyObject)` constructor replaced with static `PyIter.GetIter(PyObject)` method
+-   Python runtime can no longer be shut down if the Python error indicator is set, as it would have unpredictable behavior
 -   BREAKING: Return values from .NET methods that return an interface are now automatically
      wrapped in that interface. This is a breaking change for users that rely on being
      able to access members that are part of the implementation class, but not the
-     interface.  Use the new __implementation__ or __raw_implementation__ properties to
+     interface.  Use the new `__implementation__` or `__raw_implementation__` properties to
      if you need to "downcast" to the implementation class.
 -   BREAKING: Parameters marked with `ParameterAttributes.Out` are no longer returned in addition
      to the regular method return value (unless they are passed with `ref` or `out` keyword).
@@ -46,6 +49,10 @@ details about the cause of the failure
 -   floating point values passed from Python are no longer silently truncated
 when .NET expects an integer [#1342][i1342]
 -   More specific error messages for method argument mismatch
+-   members of `PyObject` inherited from `System.Object and `DynamicObject` now autoacquire GIL
+-   BREAKING: when inheriting from .NET types in Python if you override `__init__` you
+must explicitly call base constructor using `super().__init__(.....)`. Not doing so will lead
+to undefined behavior.
 -   BREAKING: most `PyScope` methods will never return `null`. Instead, `PyObject` `None` will be returned.
 -   BREAKING: `PyScope` was renamed to `PyModule`
 -   BREAKING: Methods with `ref` or `out` parameters and void return type return a tuple of only the `ref` and `out` parameters.
@@ -65,6 +72,7 @@ One must now either use enum members (e.g. `MyEnum.Option`), or use enum constru
 -   BREAKING: Names of .NET types (e.g. `str(__class__)`) changed to better support generic types
 -   BREAKING: overload resolution will no longer prefer basic types. Instead, first matching overload will
 be chosen.
+-   BREAKING: acquiring GIL using `Py.GIL` no longer forces `PythonEngine` to initialize
 -   BREAKING: `Exec` and `Eval` from `PythonEngine` no longer accept raw pointers.
 -   BREAKING: .NET collections and arrays are no longer automatically converted to
 Python collections. Instead, they implement standard Python
@@ -85,6 +93,7 @@ Instead, `PyIterable` does that.
 ### Fixed
 
 -   Fix incorrect dereference of wrapper object in `tp_repr`, which may result in a program crash
+-   Fixed parameterless .NET constructor being silently called when a matching constructor overload is not found ([#238][i238])
 -   Fix incorrect dereference in params array handling
 -   Fixes issue with function resolution when calling overloaded function with keyword arguments from python ([#1097][i1097])
 -   Fix `object[]` parameters taking precedence when should not in overload resolution
@@ -104,9 +113,13 @@ Instead, `PyIterable` does that.
 -   Empty parameter names (as can be generated from F#) do not cause crashes
 -   Unicode strings with surrogates were truncated when converting from Python
 -   `Reload` mode now supports generic methods (previously Python would stop seeing them after reload)
+-   Temporarily fixed issue resolving method overload when method signature has `out` parameters ([#1672](i1672))
+-   Decimal default parameters are now correctly taken into account
 
 ### Removed
 
+-   `ShutdownMode` has been removed. The only shutdown mode supported now is an equivalent of `ShutdownMode.Reload`.
+There is no need to specify it.
 -   implicit assembly loading (you have to explicitly `clr.AddReference` before doing import)
 -   messages in `PythonException` no longer start with exception type
 -   `PyScopeManager`, `PyScopeException`, `PyScope` (use `PyModule` instead)
@@ -872,3 +885,6 @@ This version improves performance on benchmarks significantly compared to 2.3.
 [p534]: https://github.com/pythonnet/pythonnet/pull/534
 [i449]: https://github.com/pythonnet/pythonnet/issues/449
 [i1342]: https://github.com/pythonnet/pythonnet/issues/1342
+[i238]: https://github.com/pythonnet/pythonnet/issues/238
+[i1481]: https://github.com/pythonnet/pythonnet/issues/1481
+[i1672]: https://github.com/pythonnet/pythonnet/pull/1672
